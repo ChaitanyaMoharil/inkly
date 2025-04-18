@@ -10,7 +10,7 @@ class WalletScreen extends StatefulWidget {
 
 class _WalletScreenState extends State<WalletScreen> {
   final UserModel _userModel = UserModel();
-  double _balance = 50.0;
+  double _balance = 213.0;
   final TextEditingController _amountController = TextEditingController();
   int _selectedPaymentMethod = 0;
 
@@ -59,8 +59,27 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Wallet'),
-        centerTitle: true,
+        title: Row(
+          children: [
+            Text(
+              'I',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const Text(
+              'nkly',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -68,11 +87,45 @@ class _WalletScreenState extends State<WalletScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildBalanceCard(),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Current Balance',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Rs. ${_balance.toInt()}/-',
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 24),
-              _buildAddMoneySection(),
-              const SizedBox(height: 24),
-              _buildTransactionHistory(),
+              ElevatedButton(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (context) => _buildRechargeBottomSheet(),
+                  );
+                },
+                child: const Text('Recharge Wallet'),
+              ),
             ],
           ),
         ),
@@ -80,276 +133,75 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Widget _buildBalanceCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      color: Colors.blue[700],
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(
-                  Icons.account_balance_wallet,
-                  color: Colors.white,
-                  size: 28,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'Current Balance',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '₹$_balance',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Available for printing',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddMoneySection() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Add Money',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _amountController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Amount',
-                prefixText: '₹ ',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Payment Method',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildPaymentMethods(),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _addMoney,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              child: const Text('Add Money'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentMethods() {
-    return Column(
-      children: [
-        RadioListTile(
-          title: Row(
-            children: [
-              Icon(Icons.credit_card, color: Colors.blue[700]),
-              const SizedBox(width: 8),
-              const Text('Credit/Debit Card'),
-            ],
-          ),
-          value: 0,
-          groupValue: _selectedPaymentMethod,
-          onChanged: (value) {
-            setState(() {
-              _selectedPaymentMethod = value as int;
-            });
-          },
-        ),
-        RadioListTile(
-          title: Row(
-            children: [
-              Icon(Icons.account_balance, color: Colors.green[700]),
-              const SizedBox(width: 8),
-              const Text('UPI'),
-            ],
-          ),
-          value: 1,
-          groupValue: _selectedPaymentMethod,
-          onChanged: (value) {
-            setState(() {
-              _selectedPaymentMethod = value as int;
-            });
-          },
-        ),
-        RadioListTile(
-          title: Row(
-            children: [
-              Icon(Icons.account_balance_wallet, color: Colors.orange[700]),
-              const SizedBox(width: 8),
-              const Text('Net Banking'),
-            ],
-          ),
-          value: 2,
-          groupValue: _selectedPaymentMethod,
-          onChanged: (value) {
-            setState(() {
-              _selectedPaymentMethod = value as int;
-            });
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTransactionHistory() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Transaction History',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildTransactionItem(
-              title: 'Added Money',
-              amount: '+₹100.00',
-              date: '15 Apr 2023',
-              isCredit: true,
-            ),
-            const Divider(),
-            _buildTransactionItem(
-              title: 'Printed Document',
-              amount: '-₹25.00',
-              date: '12 Apr 2023',
-              isCredit: false,
-            ),
-            const Divider(),
-            _buildTransactionItem(
-              title: 'Added Money',
-              amount: '+₹50.00',
-              date: '10 Apr 2023',
-              isCredit: true,
-            ),
-            const Divider(),
-            _buildTransactionItem(
-              title: 'Printed Document',
-              amount: '-₹15.00',
-              date: '05 Apr 2023',
-              isCredit: false,
-            ),
-            const SizedBox(height: 8),
-            Center(
-              child: TextButton(
-                onPressed: () {},
-                child: const Text('View All Transactions'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTransactionItem({
-    required String title,
-    required String amount,
-    required String date,
-    required bool isCredit,
-  }) {
+  Widget _buildRechargeBottomSheet() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isCredit ? Colors.green[50] : Colors.red[50],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              isCredit ? Icons.add_circle_outline : Icons.print,
-              color: isCredit ? Colors.green : Colors.red,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  date,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            amount,
+          const Text(
+            'Add Money',
             style: TextStyle(
+              fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: isCredit ? Colors.green[700] : Colors.red[700],
             ),
           ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _amountController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Amount',
+              prefixText: '₹ ',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Payment Method',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          RadioListTile(
+            title: const Text('Credit/Debit Card'),
+            value: 0,
+            groupValue: _selectedPaymentMethod,
+            onChanged: (value) {
+              setState(() {
+                _selectedPaymentMethod = value as int;
+              });
+            },
+          ),
+          RadioListTile(
+            title: const Text('UPI'),
+            value: 1,
+            groupValue: _selectedPaymentMethod,
+            onChanged: (value) {
+              setState(() {
+                _selectedPaymentMethod = value as int;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () {
+              _addMoney();
+              Navigator.pop(context);
+            },
+            child: const Text('Add Money'),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
     );

@@ -16,33 +16,30 @@ class UserModel {
   void login(String email, String password) {
     // In a real app, this would make an API call
     _isLoggedIn = true;
-    _name = "John Doe";
+    _name = "Master Chaitanya";
     _email = email;
     _profilePicture = "https://via.placeholder.com/150";
-    _walletBalance = 50.0;
+    _walletBalance = 213.0;
 
     // Add some sample documents
     _documents = [
       DocumentModel(
-        id: "1",
-        name: "Assignment.pdf",
+        id: "AC32",
+        name: "Experiment_1A.pdf",
         size: "2.5 MB",
         date: "2023-04-15",
-        status: "Printed",
+        status: "Pending",
+        pages: 8,
+        amount: "Rs. 16/-",
       ),
       DocumentModel(
-        id: "2",
-        name: "Research Paper.docx",
+        id: "AC33",
+        name: "Experiment_1A.pdf",
         size: "1.8 MB",
         date: "2023-04-10",
         status: "Pending",
-      ),
-      DocumentModel(
-        id: "3",
-        name: "Lecture Notes.pdf",
-        size: "4.2 MB",
-        date: "2023-04-05",
-        status: "Printed",
+        pages: 6,
+        amount: "Rs. 12/-",
       ),
     ];
   }
@@ -71,6 +68,8 @@ class DocumentModel {
   final String size;
   final String date;
   final String status;
+  final int pages;
+  final String amount;
 
   DocumentModel({
     required this.id,
@@ -78,5 +77,7 @@ class DocumentModel {
     required this.size,
     required this.date,
     required this.status,
+    required this.pages,
+    required this.amount,
   });
 }
