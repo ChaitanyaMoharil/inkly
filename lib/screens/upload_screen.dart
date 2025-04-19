@@ -1,8 +1,8 @@
-// lib/screens/upload_screen.dart
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
-import '../services/api_service.dart';
+import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
 
 class UploadScreen extends StatefulWidget {
@@ -16,15 +16,15 @@ class _UploadScreenState extends State<UploadScreen> {
   File? _selectedFile;
   bool _isUploading = false;
   String _fileName = '';
-  String _fileType = '';
   int _copies = 1;
   bool _isColorPrint = false;
   bool _isCollate = true;
   String _selectedPages = 'All';
+  final TextEditingController _customPagesController = TextEditingController();
+
+  // Add these new variables
   String _printCode = '';
   bool _uploadComplete = false;
-  final TextEditingController _customPagesController = TextEditingController();
-  final ApiService _apiService = ApiService();
 
   final List<String> _pageOptions = [
     'All',
@@ -61,19 +61,6 @@ class _UploadScreenState extends State<UploadScreen> {
         setState(() {
           _selectedFile = File(result.files.single.path!);
           _fileName = result.files.single.name;
-
-          // Determine file type
-          if (_fileName.endsWith('.pdf')) {
-            _fileType = 'application/pdf';
-          } else if (_fileName.endsWith('.doc') ||
-              _fileName.endsWith('.docx')) {
-            _fileType = 'application/msword';
-          } else if (_fileName.endsWith('.ppt') ||
-              _fileName.endsWith('.pptx')) {
-            _fileType = 'application/vnd.ms-powerpoint';
-          } else if (_fileName.endsWith('.txt')) {
-            _fileType = 'text/plain';
-          }
         });
       }
     } catch (e) {
@@ -100,33 +87,64 @@ class _UploadScreenState extends State<UploadScreen> {
     });
 
     try {
-      // Step 1: Get upload URL and print code
-      final response = await _apiService.getUploadUrl(_fileName, _fileType);
-      final uploadUrl = response['uploadURL'];
-      final printCode = response['print_code'];
+      // Prepare the request parameters
+      String pages =
+          _selectedPages == 'All' ? 'all' : _customPagesController.text;
 
-      // Step 2: Upload file to S3
-      final fileBytes = await _selectedFile!.readAsBytes();
-      final success =
-          await _apiService.uploadFileToS3(uploadUrl, fileBytes, _fileType);
+      String colorMode = _isColorPrint ? 'color' : 'bw';
 
-      if (success) {
-        setState(() {
-          _printCode = printCode;
-          _isUploading = false;
-          _uploadComplete = true;
-        });
+      // Step 1: Call the Lambda function to get the upload URL
+      final response = await http.post(
+        Uri.parse(
+            'https://sw14dz8xh0.execute-api.us-east-1.amazonaws.com/dev'), // Replace with your actual invoke URL
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'copies': _copies,
+          'pages': pages,
+          'colorMode': colorMode,
+          'fileName': _fileName,
+          'collate': _isCollate,
+        }),
+      );
 
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('File uploaded successfully! Print Code: $_printCode'),
-            backgroundColor: Colors.green,
-          ),
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        String uploadUrl = jsonResponse['uploadURL'];
+        String printCode = jsonResponse['printCode'];
+
+        // Step 2: Upload the file to S3 using the presigned URL
+        final uploadResponse = await http.put(
+          Uri.parse(uploadUrl),
+          headers: {
+            'Content-Type':
+                'application/pdf', // Adjust based on file type if needed
+          },
+          body: await _selectedFile!.readAsBytes(),
         );
+
+        if (uploadResponse.statusCode >= 200 &&
+            uploadResponse.statusCode < 300) {
+          setState(() {
+            _printCode = printCode;
+            _isUploading = false;
+            _uploadComplete = true;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('File uploaded successfully! Print Code: $_printCode'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          throw Exception('Upload failed: ${uploadResponse.statusCode}');
+        }
       } else {
-        throw Exception('Failed to upload file');
+        throw Exception(
+            'API request failed: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       setState(() {
@@ -189,6 +207,8 @@ class _UploadScreenState extends State<UploadScreen> {
               if (_fileName.isNotEmpty) ...[
                 _buildPrintOptions(),
               ],
+
+              // Add this section to show the print code after upload
               if (_uploadComplete) ...[
                 const SizedBox(height: 24),
                 Container(
@@ -233,10 +253,6 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   Widget _buildPrintOptions() {
-    // Rest of the _buildPrintOptions method remains the same
-    // ...
-
-    // Just update the button at the end to call our new _uploadFile method
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
