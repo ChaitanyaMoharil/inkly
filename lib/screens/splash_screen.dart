@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
-import '../main.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
-import 'signup_screen.dart';
+import 'home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -15,12 +14,19 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Uncomment to auto-navigate after delay
-    // Timer(const Duration(seconds: 2), () {
-    //   Navigator.of(context).pushReplacement(
-    //     MaterialPageRoute(builder: (context) => const LoginScreen()),
-    //   );
-    // });
+    _checkAuthState();
+  }
+
+  Future<void> _checkAuthState() async {
+    // Wait for 2 seconds to show the splash screen
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    // Always navigate to login screen for now since we're signing out in main.dart
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+    );
   }
 
   @override
@@ -71,29 +77,8 @@ class _SplashScreenState extends State<SplashScreen> {
                   ],
                 ),
                 const Spacer(),
-                // Buttons
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                          builder: (context) => const LoginScreen()),
-                    );
-                  },
-                  child: const Text('Sign In'),
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                          builder: (context) => const SignupScreen()),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Sign Up'),
+                CircularProgressIndicator(
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(height: 40),
               ],

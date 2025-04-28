@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "836578180280",
+    "project_id": "inkly-db436",
+    "storage_bucket": "inkly-db436.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:836578180280:android:b88fa6c0f82ed19ba5084d",
+        "android_client_info": {
+          "package_name": "com.example.inkly_flutter_secondattempt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5dt5w1z-d48b3L57es0docut4jZhidPc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

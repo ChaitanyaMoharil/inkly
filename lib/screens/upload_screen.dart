@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
-import '../models/user_model.dart';
+import '../Services/aws_service.dart';
+import '../services/print_job_service.dart';
+import '../models/print_job.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class UploadScreen extends StatefulWidget {
   const UploadScreen({Key? key}) : super(key: key);
@@ -21,28 +22,14 @@ class _UploadScreenState extends State<UploadScreen> {
   bool _isCollate = true;
   String _selectedPages = 'All';
   final TextEditingController _customPagesController = TextEditingController();
-
-  // Add these new variables
   String _printCode = '';
   bool _uploadComplete = false;
+  final AWSService _awsService = AWSService();
+  final PrintJobService _printJobService = PrintJobService();
 
-  final List<String> _pageOptions = [
-    'All',
-    'Custom',
-  ];
-
-  final List<String> _copyOptions = [
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-  ];
-
-  final List<String> _colorOptions = [
-    'Black and White',
-    'Color',
-  ];
+  final List<String> _pageOptions = ['All', 'Custom'];
+  final List<String> _copyOptions = ['1', '2', '3', '4', '5'];
+  final List<String> _colorOptions = ['Black and White', 'Color'];
 
   @override
   void dispose() {
@@ -86,65 +73,58 @@ class _UploadScreenState extends State<UploadScreen> {
       _uploadComplete = false;
     });
 
+    String? awsPrintCode;
+
     try {
-      // Prepare the request parameters
-      String pages =
-          _selectedPages == 'All' ? 'all' : _customPagesController.text;
+      // Get file extension
+      final fileExtension = _fileName.split('.').last.toLowerCase();
 
-      String colorMode = _isColorPrint ? 'color' : 'bw';
+      // Get presigned URL and print code
+      final uploadData =
+          await _awsService.getPresignedUrl(_fileName, fileExtension);
+      final uploadUrl = uploadData['uploadURL'];
+      awsPrintCode = uploadData['printCode'];
 
-      // Step 1: Call the Lambda function to get the upload URL
-      final response = await http.post(
-        Uri.parse(
-            'https://sw14dz8xh0.execute-api.us-east-1.amazonaws.com/dev'), // Replace with your actual invoke URL
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'copies': _copies,
-          'pages': pages,
-          'colorMode': colorMode,
-          'fileName': _fileName,
-          'collate': _isCollate,
-        }),
-      );
+      print('Debug: Received print code: $awsPrintCode');
 
-      if (response.statusCode == 200) {
-        final jsonResponse = json.decode(response.body);
-        String uploadUrl = jsonResponse['uploadURL'];
-        String printCode = jsonResponse['printCode'];
+      if (uploadUrl == null || awsPrintCode == null) {
+        throw Exception(
+            'Failed to get upload URL or print code from AWS service');
+      }
 
-        // Step 2: Upload the file to S3 using the presigned URL
-        final uploadResponse = await http.put(
-          Uri.parse(uploadUrl),
-          headers: {
-            'Content-Type':
-                'application/pdf', // Adjust based on file type if needed
-          },
-          body: await _selectedFile!.readAsBytes(),
+      // Upload file to S3
+      final fileBytes = await _selectedFile!.readAsBytes();
+      final uploadSuccess =
+          await _awsService.uploadFileToS3(uploadUrl, fileBytes);
+
+      if (uploadSuccess) {
+        // Save to Firestore
+        final newJob = PrintJob(
+          id: '',
+          fileName: _fileName,
+          printCode: awsPrintCode!,
+          uploadDate: DateTime.now(),
+          userId: FirebaseAuth.instance.currentUser!.uid,
         );
 
-        if (uploadResponse.statusCode >= 200 &&
-            uploadResponse.statusCode < 300) {
-          setState(() {
-            _printCode = printCode;
-            _isUploading = false;
-            _uploadComplete = true;
-          });
+        await _printJobService.addPrintJob(newJob);
+        print('Print job saved to Firestore!');
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content:
-                  Text('File uploaded successfully! Print Code: $_printCode'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          throw Exception('Upload failed: ${uploadResponse.statusCode}');
-        }
+        setState(() {
+          _printCode = awsPrintCode!;
+          _isUploading = false;
+          _uploadComplete = true;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('File uploaded successfully! Print Code: $_printCode'),
+            backgroundColor: Colors.green,
+          ),
+        );
       } else {
-        throw Exception(
-            'API request failed: ${response.statusCode} - ${response.body}');
+        throw Exception('S3 Upload failed');
       }
     } catch (e) {
       setState(() {
@@ -153,11 +133,116 @@ class _UploadScreenState extends State<UploadScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Error uploading file: $e'),
           backgroundColor: Colors.red,
         ),
       );
     }
+  }
+
+  Widget _buildPrintOptions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Print Options',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: _copyOptions[0],
+          decoration: const InputDecoration(
+            labelText: 'Number of Copies',
+            border: OutlineInputBorder(),
+          ),
+          items: _copyOptions.map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value),
+            );
+          }).toList(),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _copies = int.parse(newValue);
+              });
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: _colorOptions[0],
+          decoration: const InputDecoration(
+            labelText: 'Print Color',
+            border: OutlineInputBorder(),
+          ),
+          items: _colorOptions.map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value),
+            );
+          }).toList(),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _isColorPrint = newValue == 'Color';
+              });
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('Collate'),
+          value: _isCollate,
+          onChanged: (bool value) {
+            setState(() {
+              _isCollate = value;
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: _pageOptions[0],
+          decoration: const InputDecoration(
+            labelText: 'Pages',
+            border: OutlineInputBorder(),
+          ),
+          items: _pageOptions.map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value),
+            );
+          }).toList(),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _selectedPages = newValue;
+              });
+            }
+          },
+        ),
+        if (_selectedPages == 'Custom') ...[
+          const SizedBox(height: 16),
+          TextField(
+            controller: _customPagesController,
+            decoration: const InputDecoration(
+              labelText: 'Custom Pages (e.g., 1-5,8,11-13)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+        const SizedBox(height: 24),
+        ElevatedButton(
+          onPressed: _isUploading ? null : _uploadFile,
+          child: _isUploading
+              ? const CircularProgressIndicator()
+              : const Text('Upload and Print'),
+        ),
+      ],
+    );
   }
 
   @override
@@ -207,8 +292,6 @@ class _UploadScreenState extends State<UploadScreen> {
               if (_fileName.isNotEmpty) ...[
                 _buildPrintOptions(),
               ],
-
-              // Add this section to show the print code after upload
               if (_uploadComplete) ...[
                 const SizedBox(height: 24),
                 Container(
@@ -249,172 +332,6 @@ class _UploadScreenState extends State<UploadScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildPrintOptions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Copies',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButtonFormField<String>(
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16),
-            ),
-            value: _copies.toString(),
-            items: _copyOptions.map((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(value),
-              );
-            }).toList(),
-            onChanged: (String? newValue) {
-              setState(() {
-                _copies = int.parse(newValue!);
-              });
-            },
-            isExpanded: true,
-          ),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Colour',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButtonFormField<String>(
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16),
-            ),
-            value: _isColorPrint ? 'Color' : 'Black and White',
-            items: _colorOptions.map((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(value),
-              );
-            }).toList(),
-            onChanged: (String? newValue) {
-              setState(() {
-                _isColorPrint = newValue == 'Color';
-              });
-            },
-            isExpanded: true,
-          ),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Collate',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Checkbox(
-              value: _isCollate,
-              onChanged: (bool? value) {
-                setState(() {
-                  _isCollate = value!;
-                });
-              },
-              activeColor: Theme.of(context).colorScheme.primary,
-            ),
-            const Text('Yes'),
-            const SizedBox(width: 24),
-            Checkbox(
-              value: !_isCollate,
-              onChanged: (bool? value) {
-                setState(() {
-                  _isCollate = !value!;
-                });
-              },
-              activeColor: Theme.of(context).colorScheme.primary,
-            ),
-            const Text('No'),
-          ],
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Pages',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButtonFormField<String>(
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16),
-            ),
-            value: _selectedPages,
-            items: _pageOptions.map((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(value),
-              );
-            }).toList(),
-            onChanged: (String? newValue) {
-              setState(() {
-                _selectedPages = newValue!;
-              });
-            },
-            isExpanded: true,
-          ),
-        ),
-        if (_selectedPages == 'Custom') ...[
-          const SizedBox(height: 16),
-          TextField(
-            controller: _customPagesController,
-            decoration: InputDecoration(
-              hintText: 'Page number(s)',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              filled: true,
-              fillColor: Colors.grey[200],
-            ),
-            keyboardType: TextInputType.text,
-          ),
-        ],
-        const SizedBox(height: 24),
-        ElevatedButton(
-          onPressed: _isUploading ? null : _uploadFile,
-          child: _isUploading
-              ? const CircularProgressIndicator()
-              : const Text('Upload & Print'),
-        ),
-      ],
     );
   }
 }

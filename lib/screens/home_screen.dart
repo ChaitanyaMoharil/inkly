@@ -1,62 +1,18 @@
 import 'package:flutter/material.dart';
-import '../models/user_model.dart';
-import 'download_screen.dart'; // Add this import
+import '../models/print_job.dart';
+import '../services/print_job_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final PrintJobService _printJobService = PrintJobService();
   final TextEditingController _searchController = TextEditingController();
-  List<DocumentModel> _documents = [
-    DocumentModel(
-      id: "AC32",
-      name: "Experiment_1A.pdf",
-      size: "2.5 MB",
-      date: "2023-04-15",
-      status: "Pending",
-      pages: 8,
-      amount: "Rs. 16/-",
-    ),
-    DocumentModel(
-      id: "AC33",
-      name: "Experiment_1A.pdf",
-      size: "1.8 MB",
-      date: "2023-04-10",
-      status: "Pending",
-      pages: 6,
-      amount: "Rs. 12/-",
-    ),
-    DocumentModel(
-      id: "AC34",
-      name: "Experiment_1A.pdf",
-      size: "4.2 MB",
-      date: "2023-04-05",
-      status: "Printed",
-      pages: 12,
-      amount: "Rs. 24/-",
-    ),
-    DocumentModel(
-      id: "AC35",
-      name: "Experiment_1A.pdf",
-      size: "5.7 MB",
-      date: "2023-04-01",
-      status: "Printed",
-      pages: 15,
-      amount: "Rs. 30/-",
-    ),
-  ];
-  List<DocumentModel> _filteredDocuments = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _filteredDocuments = _documents;
-    _searchController.addListener(_filterDocuments);
-  }
 
   @override
   void dispose() {
@@ -64,102 +20,125 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _filterDocuments() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      if (query.isEmpty) {
-        _filteredDocuments = _documents;
-      } else {
-        _filteredDocuments = _documents
-            .where((doc) => doc.name.toLowerCase().contains(query))
-            .toList();
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
+      backgroundColor: const Color(0xFFFFF5F5),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'I',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const Text(
-              'nkly',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-      ),
-      // Add this floating action button
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const DownloadScreen()),
-          );
-        },
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        child: const Icon(Icons.download),
-        tooltip: 'Download Document',
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[200],
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+            // Inkly Logo
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Text(
+                    'I',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text(
-              'Current Prints',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+                  const Text(
+                    'nkly',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          Expanded(
-            child: _filteredDocuments.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No documents found',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  )
-                : GridView.builder(
+
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Search',
+                    prefixIcon: Icon(Icons.search),
+                    border: InputBorder.none,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+              ),
+            ),
+
+            // Current Prints Title
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Current Prints',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+
+            // Print Jobs Grid
+            Expanded(
+              child: StreamBuilder<List<PrintJob>>(
+                stream: _printJobService.getPrintJobsStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snapshot.hasError) {
+                    print('Error fetching print jobs: ${snapshot.error}');
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            color: Colors.red,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Error loading print jobs',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${snapshot.error}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No print jobs available',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    );
+                  }
+
+                  final printJobs = snapshot.data!;
+
+                  return GridView.builder(
                     padding: const EdgeInsets.all(16),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
@@ -168,191 +147,129 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisSpacing: 16,
                       childAspectRatio: 1,
                     ),
-                    itemCount: _filteredDocuments.length,
+                    itemCount: printJobs.length,
                     itemBuilder: (context, index) {
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => DocumentDetailScreen(
-                                document: _filteredDocuments[index],
+                      final job = printJobs[index];
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFFE4E4),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: Radius.circular(12),
+                                  topRight: Radius.circular(12),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.picture_as_pdf,
+                                      color: Colors.red),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      job.fileName,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          );
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey[300]!),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.red[100],
-                                  borderRadius: const BorderRadius.only(
-                                    topLeft: Radius.circular(8),
-                                    topRight: Radius.circular(8),
-                                  ),
-                                ),
-                                child: Row(
+                            Expanded(
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(
-                                      Icons.picture_as_pdf,
-                                      color: Colors.red,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        _filteredDocuments[index].name,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                    Text(
+                                      job.printCode,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey,
                                       ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ElevatedButton(
+                                      onPressed: () async {
+                                        try {
+                                          await _printJobService
+                                              .deletePrintJob(job.id);
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                    'Print out marked as Collected !!'),
+                                                backgroundColor: Colors.green,
+                                                duration: Duration(seconds: 2),
+                                                behavior:
+                                                    SnackBarBehavior.floating,
+                                                margin: EdgeInsets.all(16),
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text('Error: $e'),
+                                                backgroundColor: Colors.red,
+                                                duration:
+                                                    const Duration(seconds: 2),
+                                                behavior:
+                                                    SnackBarBehavior.floating,
+                                                margin:
+                                                    const EdgeInsets.all(16),
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.black,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 8),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      child: const Text('Collected'),
                                     ),
                                   ],
                                 ),
                               ),
-                              Expanded(
-                                child: Center(
-                                  child: Icon(
-                                    Icons.description,
-                                    size: 50,
-                                    color: Colors.grey[400],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       );
                     },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class DocumentDetailScreen extends StatelessWidget {
-  final DocumentModel document;
-
-  const DocumentDetailScreen({
-    Key? key,
-    required this.document,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Text(
-              'I',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const Text(
-              'nkly',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+                  );
+                },
               ),
             ),
           ],
         ),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.picture_as_pdf,
-                    color: Colors.red,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    document.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: Column(
-                children: [
-                  _buildDetailRow('Print Id', document.id),
-                  const SizedBox(height: 16),
-                  _buildDetailRow('Pages', document.pages.toString()),
-                  const SizedBox(height: 16),
-                  _buildDetailRow('Amount Paid', document.amount),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Collected'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 16,
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
     );
   }
 }

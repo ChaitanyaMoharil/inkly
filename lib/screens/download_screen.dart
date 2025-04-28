@@ -1,7 +1,7 @@
 // lib/screens/download_screen.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../services/api_service.dart';
+import '../Services/aws_service.dart';
 
 class DownloadScreen extends StatefulWidget {
   const DownloadScreen({Key? key}) : super(key: key);
@@ -12,9 +12,10 @@ class DownloadScreen extends StatefulWidget {
 
 class _DownloadScreenState extends State<DownloadScreen> {
   final TextEditingController _printCodeController = TextEditingController();
-  final ApiService _apiService = ApiService();
+  final AWSService _awsService = AWSService();
   bool _isLoading = false;
   String? _downloadUrl;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -26,22 +27,20 @@ class _DownloadScreenState extends State<DownloadScreen> {
     final printCode = _printCodeController.text.trim();
 
     if (printCode.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a print code'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        _errorMessage = 'Please enter a print code';
+      });
       return;
     }
 
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
+      _downloadUrl = null;
     });
 
     try {
-      final downloadUrl = await _apiService.getDownloadUrl(printCode);
-
+      final downloadUrl = await _awsService.getDownloadUrl(printCode);
       setState(() {
         _downloadUrl = downloadUrl;
         _isLoading = false;
@@ -49,28 +48,20 @@ class _DownloadScreenState extends State<DownloadScreen> {
     } catch (e) {
       setState(() {
         _isLoading = false;
+        _errorMessage = 'Error: $e';
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 
   Future<void> _openDownloadUrl() async {
     if (_downloadUrl != null) {
-      if (await canLaunch(_downloadUrl!)) {
-        await launch(_downloadUrl!);
+      final uri = Uri.parse(_downloadUrl!);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open download URL'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          _errorMessage = 'Could not open download URL';
+        });
       }
     }
   }
@@ -134,6 +125,16 @@ class _DownloadScreenState extends State<DownloadScreen> {
                 fillColor: Colors.grey[200],
               ),
             ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontSize: 14,
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _isLoading ? null : _getDownloadUrl,
